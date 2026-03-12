@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
@@ -29,10 +29,25 @@ class Priority(str, Enum):
     CRITICAL = "critical"
 
 
+class UIActionKind(str, Enum):
+    OPEN_URL = "open_url"
+    CLICK = "click"
+    FILL = "fill"
+    WAIT_FOR_TEXT = "wait_for_text"
+
+
+class HTTPMethod(str, Enum):
+    GET = "GET"
+    POST = "POST"
+    PUT = "PUT"
+    PATCH = "PATCH"
+    DELETE = "DELETE"
+
+
 class UIAction(BaseModel):
     """╨б╤В╤А╤Г╨║╤В╤Г╤А╨░ ╨┤╨╡╨╣╤Б╤В╨▓╨╕╨╣ ╨┤╨╗╤П browser_executor."""
 
-    kind: str = Field(
+    kind: UIActionKind = Field(
         ...,
         description="╨в╨╕╨┐ ╨┤╨╡╨╣╤Б╤В╨▓╨╕╤П: open_url, click, fill, wait_for_text ╨╕ ╤В.╨┐.",
     )
@@ -51,7 +66,7 @@ class UIAction(BaseModel):
 class APIAction(BaseModel):
     """╨б╤В╤А╤Г╨║╤В╤Г╤А╨░ ╨┤╨╡╨╣╤Б╤В╨▓╨╕╨╣ ╨┤╨╗╤П api_executor."""
 
-    method: str = Field(..., description="HTTP-╨╝╨╡╤В╨╛╨┤: GET, POST, PUT ╨╕ ╤В.╨┤.")
+    method: HTTPMethod = Field(..., description="HTTP-╨╝╨╡╤В╨╛╨┤: GET, POST, PUT, PATCH, DELETE.")
     path: str = Field(..., description="╨Я╤Г╤В╤М ╨╛╤В╨╜╨╛╤Б╨╕╤В╨╡╨╗╤М╨╜╨╛ base_url (╨╜╨░╨┐╤А╨╕╨╝╨╡╤А, /auth).")
     query: Dict[str, Any] = Field(
         default_factory=dict, description="╨Я╨░╤А╨░╨╝╨╡╤В╤А╤Л ╤Б╤В╤А╨╛╨║╨╕ ╨╖╨░╨┐╤А╨╛╤Б╨░."

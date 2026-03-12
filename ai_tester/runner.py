@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import asyncio
 from datetime import datetime
@@ -90,6 +90,7 @@ async def run_suite(
     env_name: Optional[str] = None,
     base_url: Optional[str] = None,
     api_base_url: Optional[str] = None,
+    max_concurrent: int = 3,
 ) -> TestRunResult:
     """
     ╨Ч╨░╨┐╤Г╤Б╨║╨░╨╡╤В ╨▓╤Б╨╡ ╨║╨╡╨╣╤Б╤Л ╨╕╨╖ TestSuite.
@@ -97,16 +98,19 @@ async def run_suite(
     run_id = datetime.now().strftime("%Y%m%d-%H%M%S")
     started_at = datetime.now()
 
-    case_results: list[CaseResult] = []
+    sem = asyncio.Semaphore(max_concurrent)
 
-    for case in suite.cases:
-        case_result = await run_single_case(
-            case=case,
-            env_name=env_name,
-            base_url=base_url,
-            api_base_url=api_base_url,
-        )
-        case_results.append(case_result)
+    async def _run_case_limited(case: TestCase) -> CaseResult:
+        async with sem:
+            return await run_single_case(
+                case=case,
+                env_name=env_name,
+                base_url=base_url,
+                api_base_url=api_base_url,
+            )
+
+    tasks = [asyncio.create_task(_run_case_limited(case)) for case in suite.cases]
+    case_results: list[CaseResult] = await asyncio.gather(*tasks)
 
     finished_at = datetime.now()
 
@@ -138,11 +142,18 @@ def run_suite_sync(
     env_name: Optional[str] = None,
     base_url: Optional[str] = None,
     api_base_url: Optional[str] = None,
+    max_concurrent: int = 3,
 ) -> TestRunResult:
     """
     ╨б╨╕╨╜╤Е╤А╨╛╨╜╨╜╨░╤П ╨╛╨▒╤С╤А╤В╨║╨░ ╨┤╨╗╤П ╨╕╤Б╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╨╜╨╕╤П ╨▓╨╜╨╡ Typer.
     """
     return asyncio.run(
-        run_suite(suite=suite, env_name=env_name, base_url=base_url, api_base_url=api_base_url)
+        run_suite(
+            suite=suite,
+            env_name=env_name,
+            base_url=base_url,
+            api_base_url=api_base_url,
+            max_concurrent=max_concurrent,
+        )
     )
 

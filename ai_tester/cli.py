@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import asyncio
 from datetime import datetime
@@ -45,6 +45,19 @@ def _save_run_result(result: TestRunResult, path: Path) -> None:
         json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
+
+@app.command(help="╨П╤Б╨╛╨▒╨╡╨╜╨╛╤З╨╕╨╡ ╨┐╨╛╨┤╨┤╨╡╤А╨╢╨║╨╛╨╣ JSON/YAML-╤Д╨░╨╣╨╗╤Г TestSuite.")
+def validate(
+    suite_path: Path = typer.Argument(..., help="╨Я╤Г╤В╤М ╨║ JSON/YAML-╤Д╨░╨╣╨╗╤Г ╤Б TestSuite."),
+) -> None:
+    try:
+        suite = _load_suite(suite_path)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[red]Файл невалиден:[/red] {exc!r}")
+        raise typer.Exit(code=1)
+
+    print(f"[green]OK[/green]: загружен suite '{suite.suite}', кейсов: {len(suite.cases)}")
 
 
 @app.callback()
@@ -139,9 +152,34 @@ def run(
         "-o",
         help="╨Я╤Г╤В╤М ╨┤╨╗╤П ╤Б╨╛╤Е╤А╨░╨╜╨╡╨╜╨╕╤П JSON-╨╛╤В╤З╤С╤В╨░ ╨╛ ╨┐╤А╨╛╨│╨╛╨╜╨╡. ╨Я╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О тАФ tests/ai-sessions/run-<ts>.json.",
     ),
+    only_tags: Optional[str] = typer.Option(
+        None,
+        "--only-tags",
+        help="Запускать только кейсы, содержащие хотя бы один из указанных тегов (через запятую).",
+    ),
+    exclude_tags: Optional[str] = typer.Option(
+        None,
+        "--exclude-tags",
+        help="Исключить кейсы, содержащие хотя бы один из указанных тегов (через запятую).",
+    ),
 ) -> None:
     cfg = AIConfig.load()
     suite = _load_suite(suite_path)
+
+    if only_tags or exclude_tags:
+        tags_only = set(map(str.strip, only_tags.split(","))) if only_tags else set()
+        tags_excl = set(map(str.strip, exclude_tags.split(","))) if exclude_tags else set()
+
+        filtered_cases = []
+        for case in suite.cases:
+            case_tags = set(case.tags or [])
+            if tags_only and not (case_tags & tags_only):
+                continue
+            if tags_excl and (case_tags & tags_excl):
+                continue
+            filtered_cases.append(case)
+
+        suite = TestSuite(**{**suite.model_dump(), "cases": filtered_cases})
 
     env_cfg = None
     if env is not None:
@@ -233,6 +271,64 @@ def session(
     print("[bold green]╨б╨╡╤Б╤Б╨╕╤П ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░.[/bold green]")
     if manual_notes:
         print("[cyan]╨б╨╛╨▒╤А╨░╨╜╤Л ╨╖╨░╨╝╨╡╤В╨║╨╕ ╨┐╨╛ ╤А╤Г╤З╨╜╤Л╨╝ ╤И╨░╨│╨░╨╝, ╨╕╤Е ╨╝╨╛╨╢╨╜╨╛ ╨╕╤Б╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╤М ╨┤╨╗╤П ╨▒╨░╨│-╤А╨╡╨┐╨╛╤А╤В╨╛╨▓.[/cyan]")
+
+
+@app.command(help="╨П╤Б╨╛╨▒╨╡╨╜╨╕╨╡ base-╨╕╤Б╤Г╤В╨▓╨╜╤Л╨╡ ai-tester.config.yaml ╨╕ пример TestSuite.")
+def init(
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Перезаписать файлы, если они уже существуют.",
+    )
+) -> None:
+    cfg_path = Path("ai-tester.config.yaml")
+    docs_dir = Path("tests/ai-docs")
+    docs_dir.mkdir(parents=True, exist_ok=True)
+    example_suite_path = docs_dir / "Example.yaml"
+
+    if cfg_path.exists() and not force:
+        print(f"[yellow]{cfg_path} уже существует, используйте --force для перезаписи.[/yellow]")
+    else:
+        cfg_path.write_text(
+            """llm:
+  base_url: "https://api.openai.com/v1"
+  model: "gpt-4.1-mini"
+  api_key_env: "OPENAI_API_KEY"
+  temperature: 0.2
+
+docs_dir: "tests/ai-docs"
+sessions_dir: "tests/ai-sessions"
+
+envs:
+  - name: "dev"
+    base_url: "http://localhost:3000"
+    api_base_url: "http://localhost:8000"
+""",
+            encoding="utf-8",
+        )
+        print(f"[green]Создан {cfg_path}[/green]")
+
+    if example_suite_path.exists() and not force:
+        print(f"[yellow]{example_suite_path} уже существует, используйте --force для перезаписи.[/yellow]")
+    else:
+        example_suite_path.write_text(
+            """suite: "Пример"
+description: "Минимальный пример UI-сценария"
+cases:
+  - id: "EX-001"
+    title: "Пример UI шага"
+    steps:
+      - id: 1
+        description: "Открыть главную страницу"
+        type: "ui"
+        action:
+          kind: "open_url"
+          url: "/"
+    expected_result: "Главная страница открыта без ошибок."
+""",
+            encoding="utf-8",
+        )
+        print(f"[green]Создан {example_suite_path}[/green]")
 
 
 def run_cli() -> None:

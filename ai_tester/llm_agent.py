@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import os
@@ -17,13 +17,34 @@ class LLMError(RuntimeError):
 
 def _extract_json_from_text(text: str) -> Dict[str, Any]:
     """
-    ╨Я╤Л╤В╨░╨╡╤В╤Б╤П ╨▓╤Л╤В╨░╤Й╨╕╤В╤М JSON ╨╕╨╖ ╨╛╤В╨▓╨╡╤В╨░ ╨╝╨╛╨┤╨╡╨╗╨╕.
-    ╨Я╨╛╨┤╨┤╨╡╤А╨╢╨╕╨▓╨░╨╡╤В ╤Д╨╛╤А╨╝╨░╤В ╤Б ```json ... ``` ╨╕ ┬л╨│╨╛╨╗╤Л╨╣┬╗ JSON.
+    Извлечь JSON из ответа LLM.
+
+    Поддерживает несколько форматов:
+    - ```json ... ```
+    - "сырой" JSON
+    - текст, внутри которого есть JSON-объект.
     """
     fenced = re.search(r"```json(.*?)```", text, flags=re.DOTALL | re.IGNORECASE)
     payload = fenced.group(1) if fenced else text
     payload = payload.strip()
-    return json.loads(payload)
+
+    # Сначала пробуем распарсить весь текст как JSON
+    try:
+        return json.loads(payload)
+    except json.JSONDecodeError:
+        pass
+
+    # Fallback: пытаемся вырезать первую JSON-структуру по фигурным скобкам
+    start = payload.find("{")
+    end = payload.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        candidate = payload[start : end + 1]
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError as exc:
+            raise LLMError(f"Не удалось распарсить JSON из ответа LLM: {exc}") from exc
+
+    raise LLMError("Ответ LLM не содержит валидный JSON для TestSuite.")
 
 
 def _chat_completion(config: LLMConfig, messages: list[dict[str, str]]) -> str:
@@ -96,7 +117,17 @@ def generate_suite_from_text(text: str, feature: str, config: LLMConfig) -> Test
     )
 
     data = _extract_json_from_text(content)
-    return TestSuite.model_validate(data)
+    suite = TestSuite.model_validate(data)
+
+    # Базовая валидация содержимого для более дружелюбных ошибок
+    if not suite.cases:
+        raise LLMError("LLM вернул TestSuite без ни одного тест-кейса.")
+
+    for case in suite.cases:
+        if not case.steps:
+            raise LLMError(f"Тест-кейс {case.id!r} не содержит шагов.")
+
+    return suite
 
 
 def summarize_run_to_markdown(run: TestRunResult) -> str:
