@@ -1,0 +1,46 @@
+suite: "Пример"
+description: "Минимальные примеры UI, API и manual-сценариев"
+cases:
+  - id: "EX-UI-001"
+    title: "Пример UI шага"
+    steps:
+      - id: 1
+        description: "Открыть главную страницу"
+        type: "ui"
+        action:
+          kind: "open_url"
+          url: "/"
+    expected_result: "Главная страница открыта без ошибок."
+    tags: ["ui", "smoke"]
+
+  - id: "EX-API-001"
+    title: "Пример API шага"
+    steps:
+      - id: 1
+        description: "Выполнить POST /auth/login"
+        type: "api"
+        action:
+          method: "POST"
+          path: "/auth/login"
+          body:
+            username: "user@example.com"
+            password: "secret"
+          expected_status: 200
+    expected_result: "Логин проходит успешно, возвращается токен."
+    tags: ["api", "smoke"]
+
+  - id: "EX-MIX-001"
+    title: "Смешанный UI+manual сценарий"
+    steps:
+      - id: 1
+        description: "Открыть страницу профиля"
+        type: "ui"
+        action:
+          kind: "open_url"
+          url: "/profile"
+      - id: 2
+        description: "Проверить вручную отображение имени пользователя"
+        type: "manual"
+    expected_result: "Имя пользователя отображается корректно."
+    tags: ["ui", "manual", "regression"]
+

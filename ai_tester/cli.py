@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import os
 from datetime import datetime
 from pathlib import Path
@@ -11,11 +10,12 @@ from rich import print
 from rich.prompt import Confirm
 
 from . import __version__
-from .config import AIConfig
+from .config import AIConfig, EnvConfig, load_config
 from .models import TestRunResult, TestSuite
 from . import llm_agent  # type: ignore[reportMissingImports]
 from . import docs as docs_module  # type: ignore[reportMissingImports]
 from . import runner as runner_module  # type: ignore[reportMissingImports]
+from .suites import filter_suite_by_tags, load_suite, save_run_result
 
 
 app = typer.Typer(
@@ -26,31 +26,22 @@ app = typer.Typer(
 )
 
 
-def _load_suite(path: Path) -> TestSuite:
-    if not path.exists():
-        raise typer.BadParameter(f"╨д╨░╨╣╨╗ ╤Б ╤В╨╡╤Б╤В-╨║╨╡╨╣╤Б╨░╨╝╨╕ ╨╜╨╡ ╨╜╨░╨╣╨┤╨╡╨╜: {path}")
+def _select_env(cfg: AIConfig, env_option: Optional[str]) -> Optional[EnvConfig]:
+    """
+    Выбрать окружение по имени опции CLI или AI_TESTER_ENV.
+    """
+    effective_env = env_option or os.getenv("AI_TESTER_ENV")
+    if effective_env is None:
+        return None
 
-    import json
-    import yaml
-
-    text = path.read_text(encoding="utf-8")
-
-    if path.suffix.lower() in {".yml", ".yaml"}:
-        data = yaml.safe_load(text)
-    else:
-        data = json.loads(text)
-
-    return TestSuite.model_validate(data)
-
-
-def _save_run_result(result: TestRunResult, path: Path) -> None:
-    import json
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    env_cfg = next((e for e in cfg.envs if e.name == effective_env), None)
+    if env_cfg is None:
+        available = ", ".join(e.name for e in cfg.envs) or "-"
+        raise typer.BadParameter(
+            f"Окружение '{effective_env}' не найдено в ai-tester.config.yaml. "
+            f"Доступные окружения: {available}"
+        )
+    return env_cfg
 
 
 @app.command(help="╨П╤Б╨╛╨▒╨╡╨╜╨╛╤З╨╕╨╡ ╨┐╨╛╨┤╨┤╨╡╤А╨╢╨║╨╛╨╣ JSON/YAML-╤Д╨░╨╣╨╗╤Г TestSuite.")
@@ -86,7 +77,7 @@ def main(
 
     if info:
         try:
-            cfg = AIConfig.load()
+            cfg = load_config()
         except RuntimeError as exc:
             print(f"[red]{exc}[/red]")
             raise typer.Exit(code=1)
@@ -157,7 +148,7 @@ def docs(
     ),
 ) -> None:
     try:
-        cfg = AIConfig.load()
+        cfg = load_config()
     except RuntimeError as exc:
         print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1)
@@ -240,12 +231,12 @@ def docs_checklist(
     ),
 ) -> None:
     try:
-        cfg = AIConfig.load()
+        cfg = load_config()
     except RuntimeError as exc:
         print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1)
 
-    suite = _load_suite(suite_path)
+    suite = load_suite(suite_path)
 
     if checklist_md is None:
         checklist_md = cfg.docs_dir / f"{suite.suite}-checklist.md"
@@ -300,49 +291,32 @@ def run(
     ),
 ) -> None:
     try:
-        cfg = AIConfig.load()
+        cfg = load_config()
     except RuntimeError as exc:
         print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1)
-    suite = _load_suite(suite_path)
+    suite = load_suite(suite_path)
 
-    if only_tags or exclude_tags:
-        tags_only = set(map(str.strip, only_tags.split(","))) if only_tags else set()
-        tags_excl = set(map(str.strip, exclude_tags.split(","))) if exclude_tags else set()
+    suite = filter_suite_by_tags(
+        suite,
+        only_tags=only_tags.split(",") if only_tags else None,
+        exclude_tags=exclude_tags.split(",") if exclude_tags else None,
+    )
 
-        filtered_cases = []
-        for case in suite.cases:
-            case_tags = set(case.tags or [])
-            if tags_only and not (case_tags & tags_only):
-                continue
-            if tags_excl and (case_tags & tags_excl):
-                continue
-            filtered_cases.append(case)
+    if not suite.cases:
+        print("[yellow]После применения фильтров по тегам не осталось ни одного кейса.[/yellow]")
+        raise typer.Exit(code=0)
 
-        suite = TestSuite(**{**suite.model_dump(), "cases": filtered_cases})
-
-    effective_env = env or os.getenv("AI_TESTER_ENV")
-
-    env_cfg = None
-    if effective_env is not None:
-        env_cfg = next((e for e in cfg.envs if e.name == effective_env), None)
-        if env_cfg is None:
-            available = ", ".join(e.name for e in cfg.envs) or "-"
-            raise typer.BadParameter(
-                f"Окружение '{effective_env}' не найдено в ai-tester.config.yaml. "
-                f"Доступные окружения: {available}"
-            )
+    env_cfg = _select_env(cfg, env)
 
     print("[cyan]Запуск набора тестов...[/cyan]")
 
-    result: TestRunResult = asyncio.run(
-        runner_module.run_suite(
-            suite=suite,
-            env_name=env_cfg.name if env_cfg else None,
-            base_url=env_cfg.base_url if env_cfg else None,
-            api_base_url=env_cfg.api_base_url if env_cfg else None,
-            max_concurrent=max_concurrent,
-        )
+    result: TestRunResult = runner_module.run_suite_sync(
+        suite=suite,
+        env_name=env_cfg.name if env_cfg else None,
+        base_url=env_cfg.base_url if env_cfg else None,
+        api_base_url=env_cfg.api_base_url if env_cfg else None,
+        max_concurrent=max_concurrent,
     )
 
     sessions_dir = cfg.sessions_dir
@@ -352,7 +326,7 @@ def run(
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         out = sessions_dir / f"run-{timestamp}.json"
 
-    _save_run_result(result, out)
+    save_run_result(result, out)
     print(f"[green]JSON-отчёт о прогоне сохранён в:[/green] {out}")
 
     summary_md = llm_agent.summarize_run_to_markdown(result)
@@ -387,41 +361,24 @@ def session(
     ),
 ) -> None:
     try:
-        cfg = AIConfig.load()
+        cfg = load_config()
     except RuntimeError as exc:
         print(f"[red]{exc}[/red]")
         raise typer.Exit(code=1)
 
-    suite = _load_suite(suite_path)
+    suite = load_suite(suite_path)
 
-    if only_tags or exclude_tags:
-        tags_only = set(map(str.strip, only_tags.split(","))) if only_tags else set()
-        tags_excl = set(map(str.strip, exclude_tags.split(","))) if exclude_tags else set()
+    suite = filter_suite_by_tags(
+        suite,
+        only_tags=only_tags.split(",") if only_tags else None,
+        exclude_tags=exclude_tags.split(",") if exclude_tags else None,
+    )
 
-        from .models import TestSuite as SuiteModel  # type: ignore
+    if not suite.cases:
+        print("[yellow]После применения фильтров по тегам не осталось ни одного кейса.[/yellow]")
+        raise typer.Exit(code=0)
 
-        filtered_cases = []
-        for case in suite.cases:
-            case_tags = set(case.tags or [])
-            if tags_only and not (case_tags & tags_only):
-                continue
-            if tags_excl and (case_tags & tags_excl):
-                continue
-            filtered_cases.append(case)
-
-        suite = SuiteModel(**{**suite.model_dump(), "cases": filtered_cases})
-
-    effective_env = env or os.getenv("AI_TESTER_ENV")
-
-    env_cfg = None
-    if effective_env is not None:
-        env_cfg = next((e for e in cfg.envs if e.name == effective_env), None)
-        if env_cfg is None:
-            available = ", ".join(e.name for e in cfg.envs) or "-"
-            raise typer.BadParameter(
-                f"Окружение '{effective_env}' не найдено в ai-tester.config.yaml. "
-                f"Доступные окружения: {available}"
-            )
+    env_cfg = _select_env(cfg, env)
 
     print(f"[bold]Интерактивная сессия по набору тестов:[/bold] {suite.suite}")
     print(
@@ -442,13 +399,11 @@ def session(
         )
 
         if auto:
-            case_result = asyncio.run(
-                runner_module.run_single_case(
-                    case=case,
-                    env_name=env_cfg.name if env_cfg else None,
-                    base_url=env_cfg.base_url if env_cfg else None,
-                    api_base_url=env_cfg.api_base_url if env_cfg else None,
-                )
+            case_result = runner_module.run_single_case_sync(
+                case=case,
+                env_name=env_cfg.name if env_cfg else None,
+                base_url=env_cfg.base_url if env_cfg else None,
+                api_base_url=env_cfg.api_base_url if env_cfg else None,
             )
         else:
             case_result = runner_module.create_empty_case_result(case)
@@ -489,75 +444,18 @@ def init(
     if cfg_path.exists() and not force:
         print(f"[yellow]{cfg_path} уже существует, используйте --force для перезаписи.[/yellow]")
     else:
-        cfg_path.write_text(
-            """llm:
-  base_url: "https://api.openai.com/v1"
-  model: "gpt-4.1-mini"
-  api_key_env: "OPENAI_API_KEY"
-  temperature: 0.2
+        from .templates import load_text
 
-docs_dir: "tests/ai-docs"
-sessions_dir: "tests/ai-sessions"
-
-envs:
-  - name: "dev"
-    base_url: "http://localhost:3000"
-    api_base_url: "http://localhost:8000"
-""",
-            encoding="utf-8",
-        )
+        cfg_path.write_text(load_text("config_default.yaml"), encoding="utf-8")
         print(f"[green]Создан {cfg_path}[/green]")
 
     if example_suite_path.exists() and not force:
         print(f"[yellow]{example_suite_path} уже существует, используйте --force для перезаписи.[/yellow]")
     else:
+        from .templates import load_text
+
         example_suite_path.write_text(
-            """suite: "Пример"
-description: "Минимальные примеры UI, API и manual-сценариев"
-cases:
-  - id: "EX-UI-001"
-    title: "Пример UI шага"
-    steps:
-      - id: 1
-        description: "Открыть главную страницу"
-        type: "ui"
-        action:
-          kind: "open_url"
-          url: "/"
-    expected_result: "Главная страница открыта без ошибок."
-    tags: ["ui", "smoke"]
-
-  - id: "EX-API-001"
-    title: "Пример API шага"
-    steps:
-      - id: 1
-        description: "Выполнить POST /auth/login"
-        type: "api"
-        action:
-          method: "POST"
-          path: "/auth/login"
-          body:
-            username: "user@example.com"
-            password: "secret"
-          expected_status: 200
-    expected_result: "Логин проходит успешно, возвращается токен."
-    tags: ["api", "smoke"]
-
-  - id: "EX-MIX-001"
-    title: "Смешанный UI+manual сценарий"
-    steps:
-      - id: 1
-        description: "Открыть страницу профиля"
-        type: "ui"
-        action:
-          kind: "open_url"
-          url: "/profile"
-      - id: 2
-        description: "Проверить вручную отображение имени пользователя"
-        type: "manual"
-    expected_result: "Имя пользователя отображается корректно."
-    tags: ["ui", "manual", "regression"]
-""",
+            load_text("example_suite.yaml"),
             encoding="utf-8",
         )
         print(f"[green]Создан {example_suite_path}[/green]")

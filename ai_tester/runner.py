@@ -6,7 +6,18 @@ from typing import Optional
 
 from .api_executor import APIExecutor
 from .browser_executor import BrowserExecutor
-from .models import APIAction, CaseResult, StepResult, StepStatus, TestCase, TestRunResult, TestRunStatus, TestSuite, UIAction
+from .models import (
+    APIAction,
+    CaseResult,
+    StepResult,
+    StepStatus,
+    StepType,
+    TestCase,
+    TestRunResult,
+    TestRunStatus,
+    TestSuite,
+    UIAction,
+)
 
 
 async def _run_ui_step(executor: BrowserExecutor, raw_action: dict) -> str:
@@ -55,11 +66,11 @@ async def run_single_case(
         for step in case.steps:
             sr = StepResult(step_id=step.id, status=StepStatus.PENDING, started_at=datetime.now())
             try:
-                if step.type.value == "ui" and step.action is not None:
+                if step.type is StepType.UI and step.action is not None:
                     actual = await _run_ui_step(browser, step.action)
                     sr.status = StepStatus.PASSED
                     sr.actual = actual
-                elif step.type.value == "api" and step.action is not None:
+                elif step.type is StepType.API and step.action is not None:
                     actual = await _run_api_step(api_exec, step.action)
                     # ╨╡╤Б╨╗╨╕ ╤В╨╡╨║╤Б╤В ╤Б╨╛╨┤╨╡╤А╨╢╨╕╤В ╨╛╤И╨╕╨▒╨║╤Г тАФ ╤Б╤З╨╕╤В╨░╨╡╨╝ fail
                     if actual.lower().startswith("╨╛╨╢╨╕╨┤╨░╨╗╤Б╤П ╤Б╤В╨░╤В╤Г╤Б") or "╨Ю╨╢╨╕╨┤╨░╨╗╨╛╤Б╤М ╨┐╨╛╨╗╨╡" in actual:
@@ -145,7 +156,7 @@ def run_suite_sync(
     max_concurrent: int = 3,
 ) -> TestRunResult:
     """
-    ╨б╨╕╨╜╤Е╤А╨╛╨╜╨╜╨░╤П ╨╛╨▒╤С╤А╤В╨║╨░ ╨┤╨╗╤П ╨╕╤Б╨┐╨╛╨╗╤М╨╖╨╛╨▓╨░╨╜╨╕╤П ╨▓╨╜╨╡ Typer.
+    Синхронный запуск набора тестов — обёртка над run_suite для CLI/тестов.
     """
     return asyncio.run(
         run_suite(
@@ -156,4 +167,24 @@ def run_suite_sync(
             max_concurrent=max_concurrent,
         )
     )
+
+
+def run_single_case_sync(
+    case: TestCase,
+    env_name: Optional[str] = None,
+    base_url: Optional[str] = None,
+    api_base_url: Optional[str] = None,
+) -> CaseResult:
+    """
+    Синхронный запуск одного кейса — обёртка над run_single_case.
+    """
+    return asyncio.run(
+        run_single_case(
+            case=case,
+            env_name=env_name,
+            base_url=base_url,
+            api_base_url=api_base_url,
+        )
+    )
+
 
