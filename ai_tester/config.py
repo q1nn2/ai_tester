@@ -29,6 +29,15 @@ class LLMConfig(BaseModel):
         description="Модель LLM, используемая для генерации тестов.",
     )
     temperature: float = 0.2
+    # Язык и стиль генерации (задел для расширения промптов)
+    language: str = Field(
+        default="ru",
+        description="Язык генерируемых сценариев (например, 'ru' или 'en').",
+    )
+    style: Optional[str] = Field(
+        default=None,
+        description="Необязательный стиль описания тестов (например, 'bdd', 'classic').",
+    )
 
 
 class EnvConfig(BaseModel):

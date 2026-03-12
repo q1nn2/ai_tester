@@ -1,0 +1,46 @@
+suite: "Авторизация"
+description: "Сценарии авторизации пользователя через веб-интерфейс"
+cases:
+  - id: "AUTH-UI-001"
+    title: "Успешный логин с валидными данными"
+    preconditions: []
+    steps:
+      - id: 1
+        description: "Открыть страницу логина"
+        type: "ui"
+        action:
+          kind: "open_url"
+          url: "/login"
+      - id: 2
+        description: "Ввести валидный email и пароль и нажать Войти"
+        type: "ui"
+        action:
+          kind: "fill"
+          selector: "#login-form"
+          text: "user@example.com / secret"
+      - id: 3
+        description: "Проверить, что пользователь попал на страницу профиля"
+        type: "manual"
+        expected: "Открыта страница /profile без ошибок"
+    expected_result: "Пользователь успешно входит в систему и видит профиль"
+    priority: "high"
+    tags: ["ui", "smoke", "auth"]
+
+  - id: "AUTH-API-001"
+    title: "Успешный логин по API"
+    preconditions: []
+    steps:
+      - id: 1
+        description: "POST /auth/login с валидным email и паролем"
+        type: "api"
+        action:
+          method: "POST"
+          path: "/auth/login"
+          body:
+            username: "user@example.com"
+            password: "secret"
+          expected_status: 200
+    expected_result: "Ответ содержит токен, статус 200"
+    priority: "high"
+    tags: ["api", "smoke", "auth"]
+

@@ -1,0 +1,22 @@
+suite: "Профиль"
+description: "Сценарии отображения и редактирования профиля пользователя"
+cases:
+  - id: "PROFILE-UI-001"
+    title: "Отображение профиля после авторизации"
+    preconditions:
+      - "Пользователь авторизован"
+    steps:
+      - id: 1
+        description: "Открыть страницу профиля"
+        type: "ui"
+        action:
+          kind: "open_url"
+          url: "/profile"
+      - id: 2
+        description: "Проверить, что отображаются email и имя пользователя"
+        type: "manual"
+        expected: "На странице видны email и имя текущего пользователя"
+    expected_result: "Профиль отображается корректно"
+    priority: "medium"
+    tags: ["ui", "profile"]
+

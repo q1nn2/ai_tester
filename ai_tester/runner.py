@@ -7,7 +7,6 @@ from typing import Optional
 from .api_executor import APIExecutor
 from .browser_executor import BrowserExecutor
 from .models import (
-    APIAction,
     CaseResult,
     StepResult,
     StepStatus,
@@ -16,18 +15,8 @@ from .models import (
     TestRunResult,
     TestRunStatus,
     TestSuite,
-    UIAction,
 )
-
-
-async def _run_ui_step(executor: BrowserExecutor, raw_action: dict) -> str:
-    action = UIAction.model_validate(raw_action)
-    return await executor.run_action(action)
-
-
-async def _run_api_step(executor: APIExecutor, raw_action: dict) -> str:
-    action = APIAction.model_validate(raw_action)
-    return await executor.run_action(action)
+from .step_executors import get_executor_for, register_default_executors
 
 
 def create_empty_case_result(case: TestCase) -> CaseResult:
@@ -62,27 +51,24 @@ async def run_single_case(
 
     api_exec = APIExecutor(base_url=api_base_url)
 
+    register_default_executors()
+
     async with BrowserExecutor(base_url=base_url) as browser:
         for step in case.steps:
             sr = StepResult(step_id=step.id, status=StepStatus.PENDING, started_at=datetime.now())
             try:
-                if step.type is StepType.UI and step.action is not None:
-                    actual = await _run_ui_step(browser, step.action)
-                    sr.status = StepStatus.PASSED
-                    sr.actual = actual
-                elif step.type is StepType.API and step.action is not None:
-                    actual = await _run_api_step(api_exec, step.action)
-                    # ╨╡╤Б╨╗╨╕ ╤В╨╡╨║╤Б╤В ╤Б╨╛╨┤╨╡╤А╨╢╨╕╤В ╨╛╤И╨╕╨▒╨║╤Г тАФ ╤Б╤З╨╕╤В╨░╨╡╨╝ fail
-                    if actual.lower().startswith("╨╛╨╢╨╕╨┤╨░╨╗╤Б╤П ╤Б╤В╨░╤В╤Г╤Б") or "╨Ю╨╢╨╕╨┤╨░╨╗╨╛╤Б╤М ╨┐╨╛╨╗╨╡" in actual:
-                        sr.status = StepStatus.FAILED
-                        sr.actual = actual
+                executor = get_executor_for(step)
+                if executor is not None:
+                    context = {"browser": browser, "api": api_exec, "case": case}
+                    sr = await executor.run(step, context)
+                    if sr.status is StepStatus.FAILED:
                         case_result.status = StepStatus.FAILED
-                    else:
-                        sr.status = StepStatus.PASSED
-                        sr.actual = actual
-                else:
+                elif step.type is StepType.MANUAL:
                     sr.status = StepStatus.NEEDS_CHECK
                     sr.actual = "╨и╨░╨│ manual тАФ ╤В╤А╨╡╨▒╤Г╨╡╤В╤Б╤П ╤А╤Г╤З╨╜╨░╤П ╨┐╤А╨╛╨▓╨╡╤А╨║╨░."
+                else:
+                    sr.status = StepStatus.NEEDS_CHECK
+                    sr.actual = "Не найден исполнитель для шага; требуется ручная проверка."
             except Exception as exc:  # noqa: BLE001
                 sr.status = StepStatus.FAILED
                 sr.actual = f"╨Ш╤Б╨║╨╗╤О╤З╨╡╨╜╨╕╨╡ ╨┐╤А╨╕ ╨▓╤Л╨┐╨╛╨╗╨╜╨╡╨╜╨╕╨╕ ╤И╨░╨│╨░: {exc!r}"

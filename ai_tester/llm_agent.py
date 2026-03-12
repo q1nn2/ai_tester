@@ -108,26 +108,31 @@ def generate_suite_from_text(text: str, feature: str, config: LLMConfig) -> Test
     ╨Ь╨╛╨┤╨╡╨╗╤М ╨┐╨╛╨╗╤Г╤З╨░╨╡╤В ╨╕╨╜╤Б╤В╤А╤Г╨║╤Ж╨╕╤О ╨▓╨╡╤А╨╜╤Г╤В╤М ╤Б╤В╤А╨╛╨│╨╛ ╨▓╨░╨╗╨╕╨┤╨╜╤Л╨╣ JSON,
     ╤Б╨╛╨▓╨╝╨╡╤Б╤В╨╕╨╝╤Л╨╣ ╤Б ╤Б╤Е╨╡╨╝╨╛╨╣ TestSuite/TestCase/TestStep.
     """
+    base_language = config.language
+    base_style = config.style or "classic"
+
     system_prompt = (
-        "╨в╤Л ╨╛╨┐╤Л╤В╨╜╤Л╨╣ QA-╨╕╨╜╨╢╨╡╨╜╨╡╤А. ╨Я╨╛ ╤В╨╡╨║╤Б╤В╨╛╨▓╨╛╨╝╤Г ╨╛╨┐╨╕╤Б╨░╨╜╨╕╤О ╤Д╨╕╤З╨╕ ╤В╤Л ╤Б╨╛╤Б╤В╨░╨▓╨╗╤П╨╡╤И╤М "
-        "╤Б╤В╤А╤Г╨║╤В╤Г╤А╨╕╤А╨╛╨▓╨░╨╜╨╜╤Л╨╡ ╤В╨╡╤Б╤В-╨║╨╡╨╣╤Б╤Л ╨▓ ╤Д╨╛╤А╨╝╨░╤В╨╡ JSON, ╨║╨╛╤В╨╛╤А╤Л╨╣ ╤Б╨╛╨╛╤В╨▓╨╡╤В╤Б╤В╨▓╤Г╨╡╤В "
-        "╤Б╤Е╨╡╨╝╨╡ TestSuite/TestCase/TestStep:\n"
+        "Ты опытный QA-инженер. "
+        f"Генерируй тесты на языке: {base_language}. "
+        f"Стиль описания тестов: {base_style}. "
+        "Выводи только один JSON-объект со структурой:\n"
         "- TestSuite: { suite: str, description?: str, cases: TestCase[] }\n"
         "- TestCase: { id: str, title: str, description?: str, feature?: str, "
         "preconditions: str[], steps: TestStep[], expected_result: str, "
-        "priority: 'low'|'medium'|'high'|'critical', tags: str[] }\n"
+        "priority: 'low'|'medium'|'high'|'critical', tags: str[], "
+        "datasets?: list[dict] }\n"
         "- TestStep: { id: int, description: str, type: 'ui'|'api'|'manual', "
         "action?: object, expected?: str }.\n"
-        "╨Ф╨╗╤П type 'ui' ╨┐╨╛╨╗╨╡ action ╨┤╨╛╨╗╨╢╨╜╨╛ ╤Б╨╛╨╛╤В╨▓╨╡╤В╤Б╤В╨▓╨╛╨▓╨░╤В╤М UIAction, ╨┤╨╗╤П 'api' тАФ APIAction. "
-        "╨Т╨╡╤А╨╜╨╕ ╨в╨Ю╨Ы╨м╨Ъ╨Ю JSON, ╨▒╨╡╨╖ ╨┐╨╛╤П╤Б╨╜╨╡╨╜╨╕╨╣."
+        "Для type 'ui' используй объекты UIAction, для 'api' — APIAction. "
+        "Строго соблюдай JSON-формат."
     )
 
     user_prompt = (
-        f"╨д╨╕╤З╨░: {feature}\n\n"
-        "╨Ю╨┐╨╕╤Б╨░╨╜╨╕╨╡ ╤Д╨╕╤З╨╕/╤В╤А╨╡╨▒╨╛╨▓╨░╨╜╨╕╨╣:\n"
+        f"Фича: {feature}\n\n"
+        "Текстовое описание фичи/требований:\n"
         f"{text}\n\n"
-        "╨б╨╛╤Б╤В╨░╨▓╤М ╨╜╨╡╨▒╨╛╨╗╤М╤И╨╛╨╣, ╨╜╨╛ ╨┐╨╛╨║╨░╨╖╨░╤В╨╡╨╗╤М╨╜╤Л╨╣ ╨╜╨░╨▒╨╛╤А ╤В╨╡╤Б╤В-╨║╨╡╨╣╤Б╨╛╨▓ (3-10 ╤И╤В╤Г╨║), "
-        "╨┐╨╛╨║╤А╤Л╨▓╨░╤О╤Й╨╕╤Е ╨┐╨╛╨╖╨╕╤В╨╕╨▓╨╜╤Л╨╡ ╨╕ ╨║╨╗╤О╤З╨╡╨▓╤Л╨╡ ╨╜╨╡╨│╨░╤В╨╕╨▓╨╜╤Л╨╡ ╤Б╤Ж╨╡╨╜╨░╤А╨╕╨╕."
+        "Сгенерируй от 3 до 10 осмысленных тест-кейсов, которые хорошо покрывают функциональность. "
+        "Используй теги (smoke, regression, ui, api и т.п.) и, где уместно, параметризацию через datasets."
     )
 
     content = _chat_completion(
@@ -165,9 +170,38 @@ def summarize_run_to_markdown(run: TestRunResult) -> str:
     lines.append(f"- ╨б╤В╨░╤А╤В: {run.started_at.isoformat()}")
     lines.append(f"- ╨Ч╨░╨▓╨╡╤А╤И╨╡╨╜╨╕╨╡: {run.finished_at.isoformat()}")
     lines.append(f"- ╨Ш╤В╨╛╨│╨╛╨▓╤Л╨╣ ╤Б╤В╨░╤В╤Г╤Б: **{run.summary_status.value}**")
-    lines.append("")
 
-    lines.append("## ╨Ъ╨╡╨╣╤Б╤Л")
+    total_cases = len(run.case_results)
+    passed_cases = sum(1 for cr in run.case_results if cr.status == "pass")  # type: ignore[comparison-overlap]
+    failed_cases = sum(1 for cr in run.case_results if cr.status == "fail")  # type: ignore[comparison-overlap]
+    partial_cases = sum(1 for cr in run.case_results if cr.status == "needs_check")  # type: ignore[comparison-overlap]
+
+    total_steps = 0
+    needs_check_steps = 0
+    for cr in run.case_results:
+        total_steps += len(cr.step_results)
+        needs_check_steps += sum(1 for sr in cr.step_results if sr.status.value == "needs_check")
+
+    lines.append("")
+    lines.append("## Итоги")
+    lines.append("")
+    lines.append(f"- Всего кейсов: {total_cases}")
+    lines.append(f"- Успешно (pass): {passed_cases}")
+    lines.append(f"- Упало (fail): {failed_cases}")
+    lines.append(f"- Частично / требуют проверки: {partial_cases}")
+    lines.append(f"- Всего шагов: {total_steps}")
+    lines.append(f"- Шагов, требующих ручной проверки (needs_check): {needs_check_steps}")
+
+    # Статистика по тегам кейсов
+    tag_stats: dict[str, dict[str, int]] = {}
+    for cr in run.case_results:
+        # tags на уровне TestCase в текущей модели недоступны из CaseResult,
+        # поэтому статистика по тегам может быть реализована позже через расширение модели.
+        # Оставляем задел для будущей реализации.
+        _ = cr  # заглушка, чтобы не было предупреждений
+
+    lines.append("")
+    lines.append("## Кейсы")
     lines.append("")
     for case_result in run.case_results:
         lines.append(f"### ╨Ъ╨╡╨╣╤Б {case_result.case_id}")

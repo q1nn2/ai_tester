@@ -133,6 +133,10 @@ class TestCase(BaseModel):
         default_factory=list,
         description="╨Я╤А╨╛╨╕╨╖╨▓╨╛╨╗╤М╨╜╤Л╨╡ ╤В╨╡╨│╨╕: smoke, regression, api, ui ╨╕ ╤В.╨┐.",
     )
+    datasets: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Наборы данных для параметризации кейса (один и тот же сценарий с разными входами).",
+    )
 
 
 class TestSuite(BaseModel):
@@ -145,9 +149,7 @@ class TestSuite(BaseModel):
     description: Optional[str] = Field(
         default=None, description="╨Ю╨▒╤Й╨╡╨╡ ╨╛╨┐╨╕╤Б╨░╨╜╨╕╨╡ ╨╛╨▒╨╗╨░╤Б╤В╨╕ ╤В╨╡╤Б╤В╨╕╤А╨╛╨▓╨░╨╜╨╕╤П."
     )
-    cases: List[TestCase] = Field(
-        default_factory=list, description="╨б╨┐╨╕╤Б╨╛╨║ ╤В╨╡╤Б╤В-╨║╨╡╨╣╤Б╨╛╨▓."
-    )
+    cases: List[TestCase] = Field(default_factory=list, description="╨б╨┐╨╕╤Б╨╛╨║ ╤В╨╡╤Б╤В-╨║╨╡╨╣╤Б╨╛╨▓.")
 
 
 class StepResult(BaseModel):

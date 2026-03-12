@@ -1,0 +1,23 @@
+[project]
+name = "ai-tester"
+version = "0.1.0"
+description = "AI-assisted test documentation and semi-automatic UI/API test runner"
+authors = [{ name = "q1nn2" }]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "typer>=0.12.0,<0.13.0",
+    "rich>=13.7.0,<14.0.0",
+    "pydantic>=2.6.0,<3.0.0",
+    "pyyaml>=6.0.0,<7.0.0",
+    "httpx>=0.27.0,<0.28.0",
+    "playwright>=1.44.0,<1.50.0",
+]
+
+[project.scripts]
+ai-tester = "ai_tester.cli:run_cli"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
