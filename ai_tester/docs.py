@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import List
 
@@ -7,8 +7,8 @@ from .models import Checklist, ChecklistItem, Priority, TestSuite
 
 def checklist_from_suite(suite: TestSuite) -> Checklist:
     """
-    ╨б╤В╤А╨╛╨╕╤В ╤З╨╡╨║-╨╗╨╕╤Б╤В ╨╕╨╖ ╨╜╨░╨▒╨╛╤А╨░ ╤В╨╡╤Б╤В-╨║╨╡╨╣╤Б╨╛╨▓:
-    ╨┐╨╛ ╨╛╨┤╨╜╨╛╨╝╤Г ╨┐╤Г╨╜╨║╤В╤Г ╨╜╨░ ╨║╨░╨╢╨┤╤Л╨╣ ╨║╨╡╨╣╤Б.
+    Построить чек-лист из TestSuite:
+    один элемент чек-листа на каждый тест-кейс.
     """
     items: List[ChecklistItem] = []
     for case in suite.cases:
@@ -24,20 +24,28 @@ def checklist_from_suite(suite: TestSuite) -> Checklist:
     return Checklist(feature=suite.suite, items=items)
 
 
-def checklist_to_markdown(checklist: Checklist) -> str:
+def checklist_to_markdown(
+    checklist: Checklist,
+    include_descriptions: bool = True,
+    include_tags: bool = True,
+) -> str:
     """
-    ╨Я╤А╨╛╤Б╤В╨╛╨╣ Markdown-╤Д╨╛╤А╨╝╨░╤В ╤З╨╡╨║-╨╗╨╕╤Б╤В╨░:
-    - ╨│╤А╤Г╨┐╨┐╨╕╤А╨╛╨▓╨║╨░ ╨┐╨╛ ╤Д╨╕╤З╨╡
-    - ╤Б╨┐╨╕╤Б╨╛╨║ ╨║╨╡╨╣╤Б╨╛╨▓ ╤Б ╨┐╤А╨╕╨╛╤А╨╕╤В╨╡╤В╨░╨╝╨╕ ╨╕ ╤В╨╡╨│╨░╨╝╨╕.
+    Преобразовать чек-лист в Markdown:
+    - заголовок с названием фичи/набора
+    - список пунктов с приоритетом и, опционально, тегами и описанием.
     """
     lines: list[str] = []
-    lines.append(f"# ╨з╨╡╨║-╨╗╨╕╤Б╤В: {checklist.feature}")
+    lines.append(f"# Чек-лист: {checklist.feature}")
     lines.append("")
 
     for item in checklist.items:
-        tags = f" [tags: {', '.join(item.tags)}]" if item.tags else ""
-        lines.append(f"- [ ] **{item.id} тАФ {item.title}** (priority: {item.priority.value}){tags}")
-        if item.description:
+        tags = ""
+        if include_tags and item.tags:
+            tags = f" [tags: {', '.join(item.tags)}]"
+        lines.append(
+            f"- [ ] **{item.id} – {item.title}** (priority: {item.priority.value}){tags}"
+        )
+        if include_descriptions and item.description:
             lines.append(f"  - {item.description}")
 
     lines.append("")

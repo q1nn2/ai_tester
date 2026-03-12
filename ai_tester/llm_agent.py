@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 import re
+from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict
 
 import httpx
@@ -51,8 +53,8 @@ def _chat_completion(config: LLMConfig, messages: list[dict[str, str]]) -> str:
     api_key = os.getenv(config.api_key_env)
     if not api_key:
         raise LLMError(
-            f"╨Э╨╡ ╨╜╨░╨╣╨┤╨╡╨╜ API-╨║╨╗╤О╤З ╨▓ ╨┐╨╡╤А╨╡╨╝╨╡╨╜╨╜╨╛╨╣ ╨╛╨║╤А╤Г╨╢╨╡╨╜╨╕╤П {config.api_key_env}. "
-            "╨Ч╨░╨┤╨░╨╣╤В╨╡ ╨║╨╗╤О╤З ╨╕ ╨┐╨╛╨▓╤В╨╛╤А╨╕╤В╨╡ ╨┐╨╛╨┐╤Л╤В╨║╤Г."
+            f"Не найден API-ключ в переменной окружения {config.api_key_env}. "
+            "Установите переменную окружения перед запуском."
         )
 
     url = f"{config.base_url.rstrip('/')}/chat/completions"
@@ -68,15 +70,35 @@ def _chat_completion(config: LLMConfig, messages: list[dict[str, str]]) -> str:
         "Content-Type": "application/json",
     }
 
+    debug_llm = os.getenv("AI_TESTER_LLM_DEBUG", "").lower() in {"1", "true", "yes"}
+
     with httpx.Client(timeout=60) as client:
         resp = client.post(url, json=body, headers=headers)
         resp.raise_for_status()
         data = resp.json()
 
+    if debug_llm:
+        logs_dir = Path("tests/ai-sessions/llm-logs")
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+        log_path = logs_dir / f"llm-{ts}.json"
+        try:
+            log_payload: Dict[str, Any] = {
+                "request": {"body": body},
+                "response": data,
+            }
+            log_path.write_text(
+                json.dumps(log_payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception:
+            # Логирование не должно ломать основной сценарий
+            pass
+
     try:
         return data["choices"][0]["message"]["content"]
     except (KeyError, IndexError) as exc:
-        raise LLMError(f"╨Э╨╡╨╛╨╢╨╕╨┤╨░╨╜╨╜╤Л╨╣ ╤Д╨╛╤А╨╝╨░╤В ╨╛╤В╨▓╨╡╤В╨░ LLM: {data}") from exc
+        raise LLMError(f"Некорректный формат ответа LLM: {data}") from exc
 
 
 def generate_suite_from_text(text: str, feature: str, config: LLMConfig) -> TestSuite:

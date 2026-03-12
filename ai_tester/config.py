@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from pathlib import Path
 from typing import Optional
@@ -10,19 +10,22 @@ from pydantic import BaseModel, Field
 class LLMConfig(BaseModel):
     provider: str = Field(
         default="openai",
-        description="╨в╨╕╨┐ ╨┐╤А╨╛╨▓╨░╨╣╨┤╨╡╤А╨░ LLM: openai/other. ╨б╨╡╨╣╤З╨░╤Б ╨╕╤Б╨┐╨╛╨╗╤М╨╖╤Г╨╡╤В╤Б╤П openai-╤Б╨╛╨▓╨╝╨╡╤Б╤В╨╕╨╝╤Л╨╣ HTTP API.",
+        description=(
+            "Провайдер LLM: openai/other. По умолчанию используется API, "
+            "совместимый с OpenAI HTTP API."
+        ),
     )
     api_key_env: str = Field(
         default="AI_TESTER_LLM_API_KEY",
-        description="╨Ш╨╝╤П ╨┐╨╡╤А╨╡╨╝╨╡╨╜╨╜╨╛╨╣ ╨╛╨║╤А╤Г╨╢╨╡╨╜╨╕╤П ╤Б API-╨║╨╗╤О╤З╨╛╨╝.",
+        description="Имя переменной окружения с API-ключом для LLM.",
     )
     base_url: str = Field(
         default="https://api.openai.com/v1",
-        description="╨С╨░╨╖╨╛╨▓╤Л╨╣ URL ╨┤╨╗╤П LLM API.",
+        description="Базовый URL для LLM API.",
     )
     model: str = Field(
         default="gpt-4.1-mini",
-        description="╨Ш╨╝╤П ╨╝╨╛╨┤╨╡╨╗╨╕ ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О.",
+        description="Модель LLM, используемая для генерации тестов.",
     )
     temperature: float = 0.2
 
@@ -42,14 +45,17 @@ class AIConfig(BaseModel):
     @classmethod
     def load(cls, path: Optional[Path] = None) -> "AIConfig":
         """
-        ╨Ч╨░╨│╤А╤Г╨╢╨░╨╡╤В ╨║╨╛╨╜╤Д╨╕╨│ ╨╕╨╖ YAML.
-        ╨Х╤Б╨╗╨╕ ╤Д╨░╨╣╨╗ ╨╛╤В╤Б╤Г╤В╤Б╤В╨▓╤Г╨╡╤В, ╨▓╨╛╨╖╨▓╤А╨░╤Й╨░╨╡╤В ╨║╨╛╨╜╤Д╨╕╨│ ╨┐╨╛ ╤Г╨╝╨╛╨╗╤З╨░╨╜╨╕╤О.
+        Загрузить конфигурацию AIConfig из YAML-файла.
+        Если файл не найден, выбрасывается понятная ошибка с подсказкой.
         """
         if path is None:
             path = Path("ai-tester.config.yaml")
 
         if not path.exists():
-            return cls()
+            raise RuntimeError(
+                f"Файл конфигурации {path} не найден. "
+                "Создайте его вручную или выполните 'python -m ai_tester.cli init'."
+            )
 
         with path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
